@@ -1,6 +1,6 @@
 // CAN Send Example
 //
-#define DISPLAY_ATTACHED     //Comment out if not using display
+//#define DISPLAY_ATTACHED     //Comment out if not using display
 #ifdef DISPLAY_ATTACHED
   #include <Wire.h>
   #include <Adafruit_GFX.h>
@@ -41,13 +41,14 @@ uint8_t adjustMode=4;   //0-3 scale, 4 = speed
 Scale_T scale[4];
 uint16_t speed=0;       //in mm/s
 byte data[8] = {0x00, 0x00, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x00};
-byte speedData[8] = {0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+byte speedData[8] = {0x00, 0x00, 0xEF, 0xFB, 0x04, 0x00, 0xFF, 0x00};
 
 //********Rotary variables ***********
 // These constants won't change. They're used to give names to the pins used:
 const int pulsePin = 3;       //Rotary Pulse input
-const int directionPin = A0;  //Direction input
-const int buttonPin = 4;      //PB Input
+const int directionPin = 4;  //Direction input
+const int buttonPin = 5;      //PB Input
+const int led1=A0, led2=A1, led3=A2, led4=A3;
 int oldValue = 1;             //What was the last scan of pulsepin showing
 int oldButtonValue=0;         //What was the last scan on the PB showing
 int clickCount=0;             //CC rotation count
@@ -69,7 +70,7 @@ void trigger(){
   if(now<lockoutPulse){
     return;
   }
-  directionValue = digitalRead(directionPin);
+  directionValue = !digitalRead(directionPin);
   if(directionValue){
 	  if(clickCount>0){
 		  clickCount--;
@@ -137,7 +138,7 @@ void transmitCycle(uint8_t cycle){
     case 2:
     case 3:
       xmitValue=scale[cycle].value;
-      data[0]=(byte)(cycle<<4) & 0xF0;
+      data[0]=(byte)((cycle+1)<<4) & 0xF0;
       data[4]=(byte)(xmitValue & 0x000000FF);
       data[5]=(byte)((xmitValue >>8) & 0x000000FF);
       data[6]=(byte)((xmitValue >>16) & 0x000000FF);
@@ -146,13 +147,14 @@ void transmitCycle(uint8_t cycle){
       break;
     case 4:
     default:
-      speedData[1]=(byte)(speed & 0x00FF);
-      speedData[2]=(byte)((speed >> 8) & 0x00FF);
-      sndStat = CAN0.sendMsgBuf(0x0CFE4782, 1, 8, speedData);
+      speedData[0]=(byte)(speed & 0x00FF);
+      speedData[1]=(byte)((speed >> 8) & 0x00FF);
+      sndStat = CAN0.sendMsgBuf(0x0CFE4926, 1, 8, speedData);
       break;
   }
   if(sndStat != CAN_OK){
-    Serial.println("Error Sending Message...");
+    Serial.print("Error Sending Message...");
+    Serial.println(cycle);
   }
 }
 #ifdef DISPLAY_ATTACHED
@@ -204,6 +206,10 @@ void setup()
   EEPROM.begin();
   GetEEPROM();
   nextAdjMode();  //start at zero and update clickCount
+  pinMode(led1,OUTPUT);
+  pinMode(led2,OUTPUT);
+  pinMode(led3,OUTPUT);
+  pinMode(led4,OUTPUT);
   //********* Rotary Setup ****************
   pinMode(pulsePin,INPUT);
   pinMode(directionPin,INPUT);
@@ -240,9 +246,45 @@ void loop()
     DisplayChanged=1;
 #endif
   }
-
+  switch(adjustMode){
+    case 4:
+    default:
+      digitalWrite(led4,HIGH);
+      digitalWrite(led3,HIGH);
+      digitalWrite(led2,HIGH);
+      digitalWrite(led1,HIGH);
+      break;
+    case 3:
+      digitalWrite(led4,HIGH);
+      digitalWrite(led3,LOW);
+      digitalWrite(led2,LOW);
+      digitalWrite(led1,LOW);
+      break;
+    case 2:
+      digitalWrite(led4,LOW);
+      digitalWrite(led3,HIGH);
+      digitalWrite(led2,LOW);
+      digitalWrite(led1,LOW);
+      break;
+    case 1:
+      digitalWrite(led4,LOW);
+      digitalWrite(led3,LOW);
+      digitalWrite(led2,HIGH);
+      digitalWrite(led1,LOW);
+      break;
+    case 0:
+      digitalWrite(led4,LOW);
+      digitalWrite(led3,LOW);
+      digitalWrite(led2,LOW);
+      digitalWrite(led1,HIGH);
+      break;
+  }
   if(adjustMode>3){
     speed=(uint16_t)((float)clickCount*44.7+.5);
+    digitalWrite(led4,HIGH);
+    digitalWrite(led3,LOW);
+    digitalWrite(led2,LOW);
+    digitalWrite(led1,LOW);
   }else{
     scale[adjustMode].value=(long)((float)clickCount*45359.2+.5);
   }
